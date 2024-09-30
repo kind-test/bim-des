@@ -1,0 +1,7 @@
+**/uv.lock
+**/.venv
+**/.vscode
+**/__pycache__
+
+**/*secret*
+!**/*secret.example*
