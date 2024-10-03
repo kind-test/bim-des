@@ -4,7 +4,7 @@ from typing import Self
 
 import pandas as pd
 from openpyxl import Workbook
-from pydantic import AliasChoices, BaseModel, Field, NonNegativeFloat
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, NonNegativeFloat
 
 from .. import excel
 
@@ -25,11 +25,15 @@ class ProcessDoorMap(BaseModel):
     scanning: str | Sequence[str] = Field(validation_alias='Scanning')
     qc: str | Sequence[str] = Field(validation_alias='QC')
 
+    model_config = ConfigDict(populate_by_name=True)
+
 
 class PathDefinition(BaseModel):
     """Defines a direct path between two doors, with a travel duration."""
     path: tuple[str, str]
     duration_seconds: float
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class RunnerExtraDurations(BaseModel):
@@ -37,6 +41,8 @@ class RunnerExtraDurations(BaseModel):
     i.e. loading and unloading times."""
     loading_time: float | str = Field(validation_alias='Loading time (per batch)')
     unloading_time: float | str = Field(validation_alias='Unloading time (per batch)')
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class RunnerConfig(BaseModel):
@@ -46,6 +52,8 @@ class RunnerConfig(BaseModel):
     cutup_dist: Sequence[float]
     extra_paths: Sequence[PathDefinition]
     extra_durations: RunnerExtraDurations
+
+    model_config = ConfigDict(populate_by_name=True)
 
     @staticmethod
     def from_excel(wbook: Workbook) -> Self:
@@ -72,7 +80,7 @@ class RunnerConfig(BaseModel):
 
         runner_speed = excel.get_name(wbook, 'runnerSpeed')
 
-        print(excel.get_name(wbook, 'runnerCutupDist'))
+        # print(excel.get_name(wbook, 'runnerCutupDist'))
         cutup_dist = [v[0] for v in excel.get_name(wbook, 'runnerCutupDist')]  # flatten
 
         t = excel.get_table(
@@ -124,6 +132,8 @@ class RunnerTimesConfig(BaseModel):
 
     extra_loading: NonNegativeFloat
     extra_unloading: NonNegativeFloat
+
+    model_config = ConfigDict(populate_by_name=True)
 
     @staticmethod
     def from_workbook(wbook: Workbook, speed: float | None = None) -> 'RunnerTimesConfig':

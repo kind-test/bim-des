@@ -4,16 +4,22 @@ from base64 import b64decode
 from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from dash import Dash, callback, dcc, html, Input, Output, State
+
 import dash_bootstrap_components as dbc
+import diskcache
 import openpyxl as oxl
+from dash import Dash, DiskcacheManager, Input, Output, State, callback, dcc, html
 from dash_compose import composition
 
-from ..bim import BimModel, runner_times
+from ..bim import BimModel
 from ..config.runners import RunnerConfig
+from . import ui_bim
+
+cache = diskcache.Cache()  # temp directory by default
 
 app = Dash(
-    external_stylesheets=[dbc.themes.UNITED]
+    external_stylesheets=[dbc.themes.UNITED],
+    background_callback_manager=DiskcacheManager(cache)
 )
 
 
@@ -36,7 +42,7 @@ def layout():
                         with html.Div(id='span-ifc-file-status'):
                             yield 'No file uploaded yet.'
                         yield dcc.Store(id='store-ifc-model')
-                    
+
                     # RUNNER TIME CONFIG FILE - BUTTON, UPLOAD, STORE
                     with dbc.Stack(direction='horizontal', gap=3):
                         with dcc.Upload(id='upload-bim-config', accept='.xlsx'):
@@ -45,20 +51,20 @@ def layout():
                         with html.Div(id='span-bim-config-status'):
                             yield 'No file uploaded yet.'
                         yield dcc.Store(id='store-bim-config')
-                    
+
                     # DOWNLOAD EXAMPLE CONFIG FILE
                     with dbc.Stack(direction='horizontal', gap=3):
                         with dbc.Button(id='button-bim-template', color='info'):
                             yield 'Download configuration template file'
                             yield dcc.Download(id='download-bim-template')
-                
+
                 # COMPUTE RUNNER TIMES
                 with dbc.Stack(direction='horizontal', gap=3):
                     with dbc.Button(id='btn-compute-runner-times', color='success', size='lg'):
                         yield 'Compute runner times!'
-                
+
                 # RESULTS!
-                yield dbc.Stack(id='bim-results')
+                yield html.Div(id='bim-results')
 
     return ret
 
@@ -66,6 +72,8 @@ def layout():
 app.layout = layout
 
 # region callbacks
+
+
 @callback(
     Output('span-ifc-file-status', 'children'),
     Output('store-ifc-model', 'data'),
@@ -77,6 +85,7 @@ app.layout = layout
         (Output('span-ifc-file-status', 'children'), 'Uploading/parsing...', 'Complete'),
         (Output('btn-upload-ifc-file', 'disabled'), True, False)
     ],
+    background=True,
     prevent_initial_call=True
 )
 def upload_ifc_file(file_b64: str, file_name: str):
@@ -94,6 +103,7 @@ def upload_ifc_file(file_b64: str, file_name: str):
     except Exception as e:
         return html.Pre(className='text-danger', children=str(e)), None
 
+
 @callback(
     Output('download-bim-template', 'data'),
     Input('button-bim-template', 'n_clicks'),
@@ -104,6 +114,7 @@ def download_runner_template(_):
     path = Path(__file__) / '../../assets/runner_times_template.xlsx'
     path = path.resolve()
     return dcc.send_file(path, filename='runner_times_template.xlsx')
+
 
 @callback(
     Output('span-bim-config-status', 'children'),
@@ -129,6 +140,7 @@ def upload_runner_config(file_b64: str, file_name: str):
     except Exception as e:
         return html.Pre(className='text-danger', children=str(e)), None
 
+
 @callback(
     Output('btn-compute-runner-times', 'disabled'),
     Input('store-ifc-model', 'data'),
@@ -138,7 +150,46 @@ def bim_compute_button_state(ifc_data, config_data):
     """Enable the 'Compute runner times' button if and only if both required files have been
     uploaded."""
     return not (bool(ifc_data) and bool(config_data))
+
+
+@callback(
+    Output('bim-results', 'children'),
+    Input('btn-compute-runner-times', 'n_clicks'),
+    State('store-bim-config', 'data'),
+    State('store-ifc-model', 'data'),
+
+    running=[
+        (Output('btn-upload-ifc-file', 'disabled'), True, False),
+        (Output('btn-upload-bim-config', 'disabled'), True, False),
+        (Output('btn-compute-runner-times', 'disabled'), True, False),
+        (
+            Output('btn-compute-runner-times', 'children'),
+            [dbc.Spinner(), ' Computing...'],
+            'Compute runner times!'
+        )
+    ],
+    background=True,
+    prevent_initial_call=True
+)
+@composition
+def compute_runner_times(_, cfg, model_b64):
+    try:
+        config = RunnerConfig.model_validate(cfg)
+        file_bytes = b64decode(model_b64)
+        with NamedTemporaryFile(mode='wb', suffix='.ifc', delete_on_close=False) as file:
+            file.write(file_bytes)
+            file.close()
+            model = BimModel.from_ifc(file.name)  # Validation
+        with html.Div() as ret:
+            yield ui_bim.compute_runner_times(model, config)
+        return ret
+    except Exception as e:
+        with html.Div() as ret:
+            yield html.H1(f'Error ({type(e)})', className='text-danger')
+            yield html.Pre(str(e))
+        return ret
 # endregion
+
 
 # region app.run
 if __name__ == '__main__':
