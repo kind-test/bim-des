@@ -21,8 +21,15 @@ def compute_runner_times(model: BimModel, config: RunnerConfig):
         [[str(k).replace("'", ''), v] for k, v in rt.items()],
         columns=['runner_journey', 'runner_time']
     )
-    table = dbc.Table.from_dataframe(df, striped=True, bordered=True, hover=True)
+    df2 = df.copy().round({'runner_time': 3})
+    table: dbc.Table = dbc.Table.from_dataframe(
+        df2, striped=True, bordered=True, hover=True, class_name='w-auto')
 
     with dbc.Stack() as ret:
-        yield table
+        yield html.H2('Runner times')
+        with dbc.Stack(direction='horizontal'):
+            yield table
+        yield dcc.Store(id='store-bim-results', data={
+            'runner_times': df.to_dict()
+        })
     return ret

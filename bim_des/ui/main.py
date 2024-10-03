@@ -19,7 +19,9 @@ cache = diskcache.Cache()  # temp directory by default
 
 app = Dash(
     external_stylesheets=[dbc.themes.UNITED],
-    background_callback_manager=DiskcacheManager(cache)
+    background_callback_manager=DiskcacheManager(cache),
+    suppress_callback_exceptions=True,
+    title='BIM-DES demo'
 )
 
 
@@ -64,7 +66,7 @@ def layout():
                         yield 'Compute runner times!'
 
                 # RESULTS!
-                yield html.Div(id='bim-results')
+                yield html.Div(id='bim-results', className='mt-5')
 
     return ret
 
@@ -159,6 +161,7 @@ def bim_compute_button_state(ifc_data, config_data):
     State('store-ifc-model', 'data'),
 
     running=[
+        (Output('bim-results', 'hidden'), True, False),
         (Output('btn-upload-ifc-file', 'disabled'), True, False),
         (Output('btn-upload-bim-config', 'disabled'), True, False),
         (Output('btn-compute-runner-times', 'disabled'), True, False),
@@ -173,6 +176,7 @@ def bim_compute_button_state(ifc_data, config_data):
 )
 @composition
 def compute_runner_times(_, cfg, model_b64):
+    """Compute runner times from an IFC model and configuration file and display the results."""
     try:
         config = RunnerConfig.model_validate(cfg)
         file_bytes = b64decode(model_b64)
